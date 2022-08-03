@@ -3,8 +3,6 @@ import logging
 import sqlalchemy
 from sqlalchemy import inspect
 
-logging.basicConfig(level=logging.DEBUG)
-
 
 def connect_to_db(path_to_db="data/viabill.db"):
     sqlite_path_to_db = f"sqlite:///{path_to_db}"
