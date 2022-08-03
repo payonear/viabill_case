@@ -3,6 +3,8 @@ import logging
 import sqlalchemy
 from sqlalchemy import inspect
 
+logging.basicConfig(level=logging.DEBUG)
+
 
 def connect_to_db(path_to_db="data/viabill.db"):
     sqlite_path_to_db = f"sqlite:///{path_to_db}"
@@ -13,7 +15,9 @@ def connect_to_db(path_to_db="data/viabill.db"):
     schemas = inspector.get_schema_names()
     tables_in_db = inspector.get_table_names(schema=schemas[0])
     logging.info(
-        "%d found inside database %s", len(tables_in_db), path_to_db.split('/')[-1]
+        "%d tables found inside database %s",
+        len(tables_in_db),
+        path_to_db.split('/')[-1],
     )
 
     return engine, inspector, tables_in_db
