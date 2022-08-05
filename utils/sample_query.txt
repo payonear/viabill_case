@@ -1,0 +1,11 @@
+SELECT t.*,
+         sex,
+         age,
+         residentialAddress,
+         postalAddress,
+         income
+
+FROM transactions t
+LEFT JOIN customers cust
+ON t.customerID = cust.customerID
+WHERE t.customerID != ''
