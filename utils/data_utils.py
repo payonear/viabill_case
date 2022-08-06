@@ -1,3 +1,5 @@
+import os
+import pickle
 import logging
 
 import numpy as np
@@ -10,7 +12,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 def connect_to_db(path_to_db: str = "data/viabill.db") -> tuple:
     sqlite_path_to_db = f"sqlite:///{path_to_db}"
     engine = sqlalchemy.create_engine(sqlite_path_to_db)
-    logging.info('SQL engine is created.')
+    logging.info("SQL engine is created.")
 
     inspector = inspect(engine)
     schemas = inspector.get_schema_names()
@@ -25,29 +27,46 @@ def connect_to_db(path_to_db: str = "data/viabill.db") -> tuple:
 
 
 def create_sample(path_to_query: str) -> pd.DataFrame:
+    logging.info("Creating samples...")
     engine, _, _ = connect_to_db()
     with open(path_to_query, "r", encoding="utf-8") as file:
         doc = file.readlines()
     query = "".join(doc)
     df = pd.read_sql(query, con=engine)
+    logging.info("Sample is successfully created.")
     return df
 
 
-def prepare_training_sample(path_to_query: str) -> tuple:
+def dump_pickle(obj, filename):
+    with open(filename, "wb") as f_out:
+        return pickle.dump(obj, f_out)
+
+
+def prepare_training_samples(path_to_query: str, output_dir: str) -> tuple:
+    logging.info("Starting samples preparation...")
     df = create_sample(path_to_query)
     df["default"] = determine_default(df)
     df = add_features(df)
-    df = preprocess_data(df)
+    df = remove_outliers(df)
+    df, scaler, ohe = preprocess_data(df)
     X_train, X_val, X_test, y_train, y_val, y_test = split_sample(df)
-    return (X_train, X_val, X_test, y_train, y_val, y_test)
+
+    logging.info("Storing samples to %s directory", output_dir)
+    dump_pickle(scaler, os.path.join(output_dir, "scaler.pkl"))
+    dump_pickle(ohe, os.path.join(output_dir, "ohe.pkl"))
+    dump_pickle((X_train, y_train), os.path.join(output_dir, "train.pkl"))
+    dump_pickle((X_val, y_val), os.path.join(output_dir, "valid.pkl"))
+    dump_pickle((X_test, y_test), os.path.join(output_dir, "test.pkl"))
+    logging.info("Samples are successfully stored to %s directory", output_dir)
 
 
 def preprocess_data(df: pd.DataFrame, scaler=None, ohe=None) -> tuple:
+    logging.info("Preprocessing data...")
     categorical = ["sex", "defaulted_earlier", "late_earlier"]
     numerical = ["price", "income", "age"]
     if not scaler or not ohe:
         scaler = StandardScaler()
-        ohe = OneHotEncoder(drop="first")
+        ohe = OneHotEncoder(drop="first", sparse=False)
 
         scaler.fit(df[numerical])
         ohe.fit(df[categorical])
@@ -59,22 +78,28 @@ def preprocess_data(df: pd.DataFrame, scaler=None, ohe=None) -> tuple:
     df_copy = df_copy[leave_columns]
     df_copy.set_index("transactionID", inplace=True)
     df_copy.sort_index(inplace=True)
+    logging.info("Data is preprocessed.")
     return (df_copy, scaler, ohe)
 
 
 def determine_default(df: pd.DataFrame) -> np.array:
+    logging.info("Target variable is calculating...")
     return np.where(df["paytmentStatus4"] == 2, 1, 0)
 
 
 def remove_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    logging.info("Removing outliers...")
     df_copy = df.copy()
     df_copy = df_copy[df_copy["age"] >= 18]
     df_copy = df_copy[df_copy["income"] >= 1000]
     df_copy = df_copy[df_copy["price"] >= 20]
+    logging.info("Outliers are removed.")
     return df_copy
 
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
+    logging.info("Adding features to base dataset...")
+
     # presorting for proper expanding
     df_copy = df.copy()
     df_copy.sort_values(["customerID", "transactionID"], inplace=True)
@@ -100,13 +125,14 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     df_copy["late_earlier"] = np.where(
         df_copy.groupby(["customerID"]).num_lates.shift(1, fill_value=0) > 0, 1, 0
     )
-
+    logging.info("Features are successfully added.")
     return df_copy
 
 
 def split_sample(
     df: pd.DataFrame, val_size: float = 0.3, test_size: float = 0.2
 ) -> tuple:
+    logging.info("Splitting sample...")
     test = df.iloc[-int(df.shape[0] * test_size) :]
     train_val = df.iloc[: -int(df.shape[0] * test_size)]
     val = train_val.iloc[-int(df.shape[0] * val_size) :]
@@ -115,4 +141,5 @@ def split_sample(
     X_train, y_train = train.drop(["default"], axis=1), train["default"]
     X_val, y_val = val.drop(["default"], axis=1), val["default"]
     X_test, y_test = test.drop(["default"], axis=1), test["default"]
+    logging.info("Sample is splitted.")
     return (X_train, X_val, X_test, y_train, y_val, y_test)
