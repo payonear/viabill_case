@@ -51,15 +51,15 @@ def preprocess_data(df: pd.DataFrame, scaler=None, ohe=None) -> tuple:
 
         scaler.fit(df[numerical])
         ohe.fit(df[categorical])
-
-    df[numerical] = scaler.transform(df[numerical])
+    df_copy = df.copy()
+    df_copy[numerical] = scaler.transform(df_copy[numerical])
     ohe_categ_cols = list(ohe.get_feature_names_out())
-    df[ohe_categ_cols] = ohe.transform(df[categorical])
+    df_copy[ohe_categ_cols] = ohe.transform(df_copy[categorical])
     leave_columns = numerical + ohe_categ_cols + ["transactionID", "default"]
-    df = df[leave_columns]
-    df.set_index("transactionID", inplace=True)
-    df.sort_index(inplace=True)
-    return (df, scaler, ohe)
+    df_copy = df_copy[leave_columns]
+    df_copy.set_index("transactionID", inplace=True)
+    df_copy.sort_index(inplace=True)
+    return (df_copy, scaler, ohe)
 
 
 def determine_default(df: pd.DataFrame) -> np.array:
@@ -67,27 +67,25 @@ def determine_default(df: pd.DataFrame) -> np.array:
 
 
 def remove_outliers(df: pd.DataFrame) -> pd.DataFrame:
-    df = df[df["age"] >= 18]
-    df = df[df["income"] >= 1000]
-    df = df[df["price"] >= 20]
-    return df
+    df_copy = df.copy()
+    df_copy = df_copy[df_copy["age"] >= 18]
+    df_copy = df_copy[df_copy["income"] >= 1000]
+    df_copy = df_copy[df_copy["price"] >= 20]
+    return df_copy
 
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     # presorting for proper expanding
-    df.sort_values(["customerID", "transactionID"], inplace=True)
-    df.reset_index(drop=True, inplace=True)
+    df_copy = df.copy()
+    df_copy.sort_values(["customerID", "transactionID"], inplace=True)
+    df_copy.reset_index(drop=True, inplace=True)
 
     # define whether customer defaulted earlier
-    df["defaulted_earlier"] = np.where(
-        df.sort_values("transactionID")
-        .groupby(["customerID"])
-        .default.expanding()
-        .sum()
-        .values
-        > 1,
-        1,
-        0,
+    df_copy["num_defs"] = (
+        df_copy.groupby(["customerID"]).default.expanding().sum().values
+    )
+    df_copy["defaulted_earlier"] = np.where(
+        df_copy.groupby(["customerID"]).num_defs.shift(1, fill_value=0) > 0, 1, 0
     )
 
     # define whether customer was late with payments earlier
@@ -97,29 +95,24 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
         "paytmentStatus3",
         "paytmentStatus4",
     ]
-    df["late"] = np.where(df[pstatuses].max(axis=1) > 0, 1, 0)
-    df["late_earlier"] = np.where(
-        df.sort_values("transactionID")
-        .groupby(["customerID"])
-        .late.expanding()
-        .sum()
-        .values
-        > 1,
-        1,
-        0,
+    df_copy["late"] = np.where(df_copy[pstatuses].max(axis=1) > 0, 1, 0)
+    df_copy["num_lates"] = df_copy.groupby(["customerID"]).late.expanding().sum().values
+    df_copy["late_earlier"] = np.where(
+        df_copy.groupby(["customerID"]).num_lates.shift(1, fill_value=0) > 0, 1, 0
     )
 
-    return df
+    return df_copy
 
 
 def split_sample(
     df: pd.DataFrame, val_size: float = 0.3, test_size: float = 0.2
 ) -> tuple:
     test = df.iloc[-int(df.shape[0] * test_size) :]
-    val = df.iloc[-int(df.shape[0] * val_size) : -int(df.shape[0] * test_size)]
-    train = df.iloc[: -int(df.shape[0] * val_size) :]
+    train_val = df.iloc[: -int(df.shape[0] * test_size)]
+    val = train_val.iloc[-int(df.shape[0] * val_size) :]
+    train = train_val.iloc[: -int(df.shape[0] * val_size)]
 
-    X_train, y_train = train.drop(["default"]), train["default"]
-    X_val, y_val = val.drop(["default"]), val["default"]
-    X_test, y_test = test.drop(["default"]), test["default"]
+    X_train, y_train = train.drop(["default"], axis=1), train["default"]
+    X_val, y_val = val.drop(["default"], axis=1), val["default"]
+    X_test, y_test = test.drop(["default"], axis=1), test["default"]
     return (X_train, X_val, X_test, y_train, y_val, y_test)
