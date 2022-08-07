@@ -7,5 +7,6 @@ code_quality_checks:
 	pylint --recursive=y .
 
 setup:
+	pip install -U pipenv
 	pipenv install --dev
 	pre-commit install
