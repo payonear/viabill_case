@@ -26,12 +26,12 @@ def preprocess_data(df: pd.DataFrame) -> tuple:
     df_copy = df_copy[leave_columns]
     df_copy.set_index("transactionID", inplace=True)
     df_copy.sort_index(inplace=True)
-    return (df_copy, scaler, ohe)
+    return df_copy
 
 
 def predict(application):
     application = pd.DataFrame(application, index=[0])
-    application = preprocess_data(application[0])
+    application = preprocess_data(application)
     preds = model.predict_proba(application)
     return float(preds[0][1])
 

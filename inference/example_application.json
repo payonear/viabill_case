@@ -1,0 +1,9 @@
+{
+    "transactionID": 100000,
+    "price": 50,
+    "income": 10000,
+    "age": 35,
+    "sex": 1,
+    "defaulted_earlier": 0,
+    "late_earlier": 0
+}

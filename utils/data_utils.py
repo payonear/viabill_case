@@ -7,7 +7,7 @@ import sqlalchemy
 from sqlalchemy import inspect
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from utils.io_utils import dump_pickle
+from utils.io_utils import dump_pickle  # pylint: disable=import-error
 
 
 def connect_to_db(path_to_db: str = "data/viabill.db") -> tuple:
