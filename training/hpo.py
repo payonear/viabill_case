@@ -1,18 +1,14 @@
 import os
-import pickle
 
 import numpy as np
 import mlflow
 from hyperopt import STATUS_OK, Trials, tpe, fmin
 from sklearn.metrics import roc_auc_score
 
+from utils.io_utils import load_pickle  # pylint: disable=import-error
+
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
 mlflow.set_experiment("viabill-experiment")
-
-
-def load_pickle(filename):
-    with open(filename, "rb") as f_in:
-        return pickle.load(f_in)
 
 
 def tune(model, search_space: dict, num_trials: int, path_to_data: str, tag: str):
@@ -28,6 +24,7 @@ def tune(model, search_space: dict, num_trials: int, path_to_data: str, tag: str
             y_pred = candidate.predict(X_val)
             roc_auc = roc_auc_score(y_val, y_pred)
             mlflow.log_metric("roc_auc_score", roc_auc)
+            mlflow.sklearn.log_model(candidate, "model")
 
         return {"loss": -1 * roc_auc, "status": STATUS_OK}
 

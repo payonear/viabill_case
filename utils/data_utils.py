@@ -1,5 +1,4 @@
 import os
-import pickle
 import logging
 
 import numpy as np
@@ -7,6 +6,8 @@ import pandas as pd
 import sqlalchemy
 from sqlalchemy import inspect
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+from utils.io_utils import dump_pickle
 
 
 def connect_to_db(path_to_db: str = "data/viabill.db") -> tuple:
@@ -37,11 +38,6 @@ def create_sample(path_to_query: str) -> pd.DataFrame:
     return df
 
 
-def dump_pickle(obj, filename):
-    with open(filename, "wb") as f_out:
-        return pickle.dump(obj, f_out)
-
-
 def prepare_training_samples(path_to_query: str, output_dir: str) -> tuple:
     logging.info("Starting samples preparation...")
     df = create_sample(path_to_query)
@@ -64,17 +60,21 @@ def preprocess_data(df: pd.DataFrame, scaler=None, ohe=None) -> tuple:
     logging.info("Preprocessing data...")
     categorical = ["sex", "defaulted_earlier", "late_earlier"]
     numerical = ["price", "income", "age"]
+    leave_columns = []
     if not scaler or not ohe:
         scaler = StandardScaler()
         ohe = OneHotEncoder(drop="first", sparse=False)
 
         scaler.fit(df[numerical])
         ohe.fit(df[categorical])
+
+        leave_columns += ["default"]
+
     df_copy = df.copy()
     df_copy[numerical] = scaler.transform(df_copy[numerical])
     ohe_categ_cols = list(ohe.get_feature_names_out())
     df_copy[ohe_categ_cols] = ohe.transform(df_copy[categorical])
-    leave_columns = numerical + ohe_categ_cols + ["transactionID", "default"]
+    leave_columns += numerical + ohe_categ_cols + ["transactionID"]
     df_copy = df_copy[leave_columns]
     df_copy.set_index("transactionID", inplace=True)
     df_copy.sort_index(inplace=True)
